@@ -1,0 +1,269 @@
+     <!DOCTYPE html>
+      <html lang="en">
+
+      <head>
+         
+
+          <meta charset="UTF-8">
+          <title>therightdoctors.com</title>
+
+
+          <!-- JS -->
+          <script src="https://static.opentok.com/v2/js/opentok.min.js" type="text/javascript" defer></script>
+          <script src="https://code.jquery.com/jquery-1.10.2.js" defer></script>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js" defer></script>
+          
+
+      </head>
+
+ <script type="text/javascript">
+
+      /* global OT CommunicationAccPack */
+      (function () {
+
+        // Modules
+        var _communication;
+        // OpenTok session
+        var _session;
+        // Application State
+        var _initialized = false;
+        var _callActive = false;
+        var _remoteParticipant = false;
+        var _callProps = {
+          enableLocalAudio: true,
+          enableLocalVideo: true,
+          enableRemoteAudio: true,
+          enableRemoteVideo: true,
+        };
+
+        // Options hash
+        var _options = {
+          apiKey: '45869022', // Replace with your OpenTok API key
+          sessionId: '2_MX40NTg2OTAyMn5-MTQ5NTA4MzkyNjYxN354ZjBlb1pLQnJGNEt2RTh6em1WSVd0M1J-fg', // Replace with a generated Session ID
+          token: 'T1==cGFydG5lcl9pZD00NTg2OTAyMiZzaWc9MGYyNzhiNmE5Njg3YTFmZDQxN2UxNjQ4YmYwYWI4YTc3MjA3MzY2NjpzZXNzaW9uX2lkPTJfTVg0ME5UZzJPVEF5TW41LU1UUTVOVEE0TXpreU5qWXhOMzU0WmpCbGIxcExRbkpHTkV0MlJUaDZlbTFXU1ZkME0xSi1mZyZjcmVhdGVfdGltZT0xNDk1MDg0MDYzJm5vbmNlPTAuNzg1NTc2MjYzMDc5NjE1NSZyb2xlPXB1Ymxpc2hlciZleHBpcmVfdGltZT0xNDk1MTcwNDYw', // Replace with a generated token
+          localCallProperties: {
+            insertMode: 'append',
+            width: '100%',
+            height: '100%',
+            showControls: false,
+            style: {
+              buttonDisplayMode: 'off'
+            }}};
+
+        /** DOM Helper Methods */
+        var _makePrimaryVideo = function (element) {
+          $(element).addClass('primary-video');
+          $(element).removeClass('secondary-video');
+        };
+
+        var _makeSecondaryVideo = function (element) {
+          $(element).removeClass('primary-video');
+          $(element).addClass('secondary-video');
+        };
+
+        // Swap positions of the small and large video elements when participant joins or leaves call
+        var _swapVideoPositions = function (type) {
+
+          if (type === 'start' || type === 'joined') {
+
+            _makePrimaryVideo('#videoHolderBig');
+            _makeSecondaryVideo('#videoHolderSmall');
+
+            /**
+             * The other participant may or may not have joined the call at this point.
+             */
+            if (!!_remoteParticipant) {
+              $('#remoteControls').show();
+              $('#videoHolderBig').show();
+            }
+
+          } else if ((type === 'end' && !!_remoteParticipant) || type === 'left') {
+
+            _makePrimaryVideo('#videoHolderSmall');
+            _makeSecondaryVideo('#videoHolderBig');
+
+            $('#remoteControls').hide();
+            $('#videoHolderBig').hide();
+          }
+
+        };
+
+        // Toggle local or remote audio/video
+        var _toggleMediaProperties = function (type) {
+
+          _callProps[type] = !_callProps[type];
+
+          _communication[type](_callProps[type]);
+
+          $(['#', type].join('')).toggleClass('disabled');
+
+        };
+
+
+        var _startCall = function () {
+
+          // Start call
+          _communication.start();
+          _callActive = true;
+
+          // Update UI
+          $('#callActive').addClass('active');
+          $('#videoHolderSmall').addClass('active');
+
+          $('#enableLocalAudio').show();
+          $('#enableLocalVideo').show();
+
+          if (_remoteParticipant) {
+            _swapVideoPositions('start');
+          }
+
+        };
+
+        var _endCall = function () {
+
+       send_signal();
+
+          // End call
+          _communication.end();
+          _callActive = false;
+
+          // Update UI
+          $('#callActive').toggleClass('active');
+
+          $('#enableLocalAudio').hide();
+          $('#enableLocalVideo').hide();
+
+          if (_callActive || _remoteParticipant) {
+            _swapVideoPositions('end');
+          } 
+
+
+        };
+
+
+       var _addEventListeners = function () {
+
+    _session.on('streamCreated', function (event) {
+        
+              if (event.stream.videoType === 'camera') {
+              _remoteParticipant = true;
+              if (_callActive) {
+                _swapVideoPositions('joined');
+              }}});
+
+          _session.on('streamDestroyed', function (event) {
+               if (event.stream.videoType === 'camera') {
+              _remoteParticipant = false;
+              if (_callActive) {
+                _swapVideoPositions('left');
+              }
+            }
+          });
+
+
+          _session.on("signal", function(message) {
+            //alert('signal recieved'+message);
+            console.log(message);
+            if(message.data=='bye')
+             { 
+              alert('call ended');
+            }
+         });
+
+
+          // Click events for enabling/disabling audio/video
+          var controls = [
+            'enableLocalAudio',
+            'enableLocalVideo',
+            'enableRemoteAudio',
+            'enableRemoteVideo'
+          ];
+          controls.forEach(function (control) {
+            $(['#', control].join('')).on('click', function () {
+              _toggleMediaProperties(control);
+            });
+          });
+        };
+
+        var _init = function () {
+
+          // Get session
+          _session = OT.initSession(_options.apiKey, _options.sessionId);
+
+          // Connect
+          _session.connect(_options.token, function (error) {
+            if (error) {
+              console.log('Session failed to connect');
+            } else {
+              _communication = new CommunicationAccPack(_.extend(_options, {
+                session: _session,
+                localCallProperties: _options.localCallProperties
+              }));
+              _addEventListeners();
+              _initialized = true;
+              _startCall();
+            }});
+        };
+
+        var _connectCall = function () {
+
+          if (!_initialized) {
+            _init();
+          } else {
+            !_callActive ? _startCall() : _endCall();
+          }};
+
+        var send_signal = function (message){
+          _session.signal(
+      {
+
+        type: "Ended",
+        data: "bye"
+        
+      },
+      function(error) {
+        if (error) {
+          console.log("signal error ("
+                       + error.name
+                       + "): " + error.message);
+        } else {
+          console.log("signal sent.");
+        }});
+    };
+
+        // Start or end call
+        document.addEventListener('DOMContentLoaded', function () {
+          $('#callActive').on('click', _connectCall);
+     
+          });
+      }());
+
+
+
+      </script>
+
+
+      <body>
+
+          <div class="ots-app-container">
+              <div id="main" class="ots-widget-container">
+                  <div id="videoContainer" class="video-container">
+                      <div id="videoHolderSmall" class="video-wrap primary-video video-background"></div>
+                      <div id="feedControls" class="local-controls">
+                          <div id="enableLocalVideo" class="ots-video-control circle video enabled" style="display:none;"></div>
+                          <div id="callActive" class="ots-video-control circle call"></div>
+                          <div id="close" class="ots-video-control circle call" style="background-color:red"></div>
+                         <div id="enableLocalAudio" class="ots-video-control circle microphone enabled" style="display:none;"></div>
+                      </div>
+                      <div id="videoHolderBig" class="video-wrap secondary-video" style="display:none;"></div>
+                      <div id="remoteControls" class="remote-controls" style="display:none;">
+                          <div id="enableRemoteAudio" class="ots-video-control audio" id="enableRemoteAudio"></div>
+                          <div id="enableRemoteVideo" class="ots-video-control video"></div>
+                      </div>
+                  
+                  </div>
+              </div>
+          </div>
+    </body>
+
+      </html>
